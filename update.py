@@ -2,9 +2,10 @@ import os
 import requests
 import zipfile
 import sys
+import shutil
 
 # Configuration
-VERSION = "1.0.0"  # Version locale initiale
+VERSION = "1.0.1"  # Version locale initiale
 VERSION_URL = "https://raw.githubusercontent.com/Crustabri/Speedfouf/main/version.txt"  # URL du fichier version.txt distant
 UPDATE_DIR = "update"  # Dossier temporaire pour les mises à jour
 
@@ -50,7 +51,7 @@ def download_update(latest_version):
                 file.write(chunk)
 
         print("[INFO] Téléchargement terminé. Extraction de la mise à jour...")
-        
+
         # Extraction des fichiers
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(UPDATE_DIR)
@@ -68,13 +69,14 @@ def apply_update(latest_version):
 
     try:
         print("[INFO] Application de la mise à jour...")
-        
+
         # Parcourt les fichiers extraits et les copie dans le répertoire principal
         for root, dirs, files in os.walk(UPDATE_DIR):
             for file in files:
                 src_path = os.path.join(root, file)
                 dst_path = os.path.join(os.getcwd(), file)
-                os.replace(src_path, dst_path)
+                print(f"[INFO] Remplacement : {src_path} -> {dst_path}")
+                shutil.move(src_path, dst_path)
 
         # Met à jour la version locale
         VERSION = latest_version
@@ -82,6 +84,17 @@ def apply_update(latest_version):
         print("[INFO] Mise à jour appliquée avec succès.")
     except Exception as e:
         print(f"[ERROR] Impossible d'appliquer la mise à jour : {e}")
+
+def restart_application():
+    """
+    Redémarre l'application après la mise à jour.
+    """
+    try:
+        print("[INFO] Redémarrage de l'application...")
+        os.execl(sys.executable, sys.executable, *sys.argv)
+    except Exception as e:
+        print(f"[ERROR] Impossible de redémarrer l'application : {e}")
+        sys.exit(1)
 
 def main():
     """
@@ -94,8 +107,8 @@ def main():
         print(f"[INFO] Mise à jour disponible vers la version {latest_version}.")
         if download_update(latest_version):
             apply_update(latest_version)
-            print("[INFO] Mise à jour terminée. Veuillez relancer le jeu.")
-            sys.exit(0)  # Quitte le programme après mise à jour
+            print("[INFO] Mise à jour terminée. Redémarrage...")
+            restart_application()
         else:
             print("[ERROR] La mise à jour a échoué. Lancement de la version actuelle.")
     else:

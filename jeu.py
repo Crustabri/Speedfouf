@@ -66,30 +66,27 @@ firebase_admin.initialize_app(cred, {
 
 
 
-def save_time_online(pseudo, elapsed_time):
-
-    """Enregistre le temps en ligne."""
-
+def save_time_online_if_better(pseudo, elapsed_time):
+    """
+    Enregistre le temps en ligne si c'est un score valable pour le top 5 personnel.
+    """
     try:
+        # Récupère le leaderboard personnel
+        personal_leaderboard = get_personal_leaderboard(pseudo)
 
-        ref = db.reference('leaderboard')
-
-        new_entry = {
-
-            "pseudo": pseudo,
-
-            "time": elapsed_time
-
-        }
-
-        print(f"[DEBUG] Tentative d'enregistrement : {new_entry}")
-
-        ref.push(new_entry)  # Ajoute un nouvel enregistrement
-
-        print("[INFO] Temps sauvegardé en ligne avec succès.")
-
+        # Vérifie si le score est éligible pour entrer dans le top 5
+        if len(personal_leaderboard) < 5 or elapsed_time < personal_leaderboard[-1]['time']:
+            ref = db.reference('leaderboard')
+            new_entry = {
+                "pseudo": pseudo,
+                "time": elapsed_time
+            }
+            print(f"[DEBUG] Tentative d'enregistrement : {new_entry}")
+            ref.push(new_entry)  # Ajoute un nouvel enregistrement
+            print("[INFO] Temps sauvegardé en ligne avec succès.")
+        else:
+            print(f"[INFO] Temps non sauvegardé car non meilleur que le top 5 personnel.")
     except Exception as e:
-
         print(f"[ERROR] Échec de l'enregistrement en ligne : {e}")
 
 
@@ -320,11 +317,11 @@ def locker_screen():
                 if back_button.collidepoint(mouse_pos):
                     running = False
 
-
 def main_game(pseudo):
     """Lance le jeu principal."""
     global background_color  # Utilise la couleur de fond sélectionnée
     running = True
+    last_time = None  # Variable pour stocker le dernier temps réalisé
 
     while running:
         # Récupère le leaderboard global et personnel
@@ -423,6 +420,12 @@ def main_game(pseudo):
             time_surface = font.render(elapsed_time_text, True, WHITE)
             screen.blit(time_surface, (10, 10))
 
+            # Affiche le dernier temps réalisé
+            if last_time is not None:
+                last_time_text = f"Dernier: {last_time:.2f} s"
+                last_time_surface = font.render(last_time_text, True, WHITE)
+                screen.blit(last_time_surface, (10, 40))  # Position juste en dessous du temps actuel
+
             # Affiche le leaderboard global avec des couleurs
             leaderboard_text = "Leaderboard:"
             leaderboard_surface = font.render(leaderboard_text, True, WHITE)
@@ -469,15 +472,14 @@ def main_game(pseudo):
 
         if won:
             elapsed_time = time.time() - start_time
-            print(f"[INFO] Envoi du score {pseudo} avec un temps de {elapsed_time:.2f}s à Firebase.")
-            save_time_online(pseudo, elapsed_time)
-            print(f"[INFO] Score sauvegardé : {pseudo} - {elapsed_time:.2f} secondes.")
+            last_time = elapsed_time  # Met à jour le dernier temps réalisé
+            print(f"[INFO] Vérification du score pour ajout au leaderboard...")
+            save_time_online_if_better(pseudo, elapsed_time)  # Vérifie et sauvegarde si applicable
         else:
             print("[INFO] Game Over. Temps non sauvegardé.")
 
         print("[INFO] Partie terminée. Redémarrage dans 1 seconde.")
         time.sleep(0)
-
 
 
 if __name__ == "__main__":
@@ -487,8 +489,9 @@ if __name__ == "__main__":
 
         if update_available:
             print(f"[INFO] Nouvelle mise à jour disponible : version {latest_version}.")
-            if download_update():
-                apply_update()
+            if download_update(latest_version):
+                apply_update(latest_version)
+
                 print("[INFO] Mise à jour terminée. Veuillez relancer le jeu.")
                 sys.exit(0)  # Quitte le programme après la mise à jour
             else:
